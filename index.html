@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convolução</title>
+    <link href="https://cdn.jsdelivr.net/npm/flowbite@2.5.1/dist/flowbite.min.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body class="bg-black px-4 max-w-5xl m-auto">
+    <header class="py-4">
+        
+    </header>
+    <div class="flex flex-col gap-4">
+        <audio src=""></audio>
+        <div>
+            <label class="block mb-2 text-sm font-medium text-white" for="input-signal">Faça o upload do sinal de entrada (.wav/.mp3)</label>
+            <input class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none" id="input-signal" name="input-signal" type="file">
+        </div>
+        <div>
+            <label class="block mb-2 text-sm font-medium text-white" for="impulse-response">Faça o upload da resposta impulsiva (.wav/.mp3)</label>
+            <input class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none" id="impulse-response" name="impulse-response" type="file">
+        </div>
+
+        <div>
+            <p class="block mb-2 text-sm font-medium text-white text-center">Ativar convolução entre os sinais</p>
+            <div class="flex content-center w-full">
+                <label class="relative inline-flex items-center cursor-pointer m-auto">
+                    <input type="checkbox" class="sr-only peer" name="convolution-button" id="convolution-button">
+                    <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                </label>
+            </div>
+        </div>
+
+        <p class="text-center font-bold text-white py-2">Configurações Gerais</p>
+        <div>
+            <label class="block mb-2 text-sm font-medium text-white" for="samplerate">Taxa de amostragem do dispositivo de saída</label>
+            <select class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 pl-4 mb-2" name="samplerate" id="samplerate">
+                <option value="">Selecione a taxa de amostragem</option>
+                <option value="96000">96.000 Hz</option>
+                <option value="48000">48.000 Hz</option>
+                <option value="44100">44.100 Hz</option>
+            </select>
+            <p class="mb-2 text-center text-white text-sm">ou</p>
+            <button class="w-full rounded bg-white text-sm p-1" id="check-samplerate" name="check-samplerate">Verificar taxa de amostragem padrão do meu dispositivo</button>
+        </div>
+        <p class="text-center font-bold text-white py-2">Configurações Analyser</p>
+        <div>
+            <label class="block mb-2 text-sm font-medium text-white" for="fftsize">Tamanho da janela para realizar a transformada rápida de Fourier (FFT)</label>
+            <select class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 pl-4 mb-2" name="fftsize" id="fftsize">
+                <option value="512">512</option>
+                <option value="1024" selected>1024</option>
+                <option value="2048">2048</option>
+            </select>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+            <div>
+                <label class="block mb-2 text-sm font-medium text-white" for="max_db">Valor máximo em decibéis</label>
+                <input class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none" type="number" value="-10" name="max_db" id="max_db">
+            </div>
+            <div>
+                <label class="block mb-2 text-sm font-medium text-white" for="min_db">Valor mínimo em decibéis</label>
+                <input class="block w-full text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none" type="number" value="-90" name="min_db" id="min_db">
+            </div>
+        </div>
+        <div class="mb-24">
+            <canvas id="chart" class="w-full bg-gray-300 mx-auto">
+            </canvas>
+        </div>
+    </div>
+    <div class="flex flex-col bg-transparent fixed bottom-0 left-0 w-full p-2">    
+        <div class="rounded-xl bg-gray-800 px-2 py-1 max-w-7xl w-full mx-auto">
+            <p class="text-center text-white text-sm font-bold" id="audio-name" name="audio-name"></p>
+            <div>
+                <input class="w-full h-1.5" type="range" id="time-range" name="time-range" value=0 step="0.01">
+            </div>
+            <div class="flex flex-row justify-between px-1">
+                <p class="text-white text-xs w-20" id="current-time" name="current-time">00:00</p>
+                <div class="flex flex-row justify-center">
+                    <button id="play" data-playing="false" role="switch" aria-checked="false">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="white" class="w-8 h-8">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z" />
+                        </svg>
+                    </button>                                          
+                </div>
+                <p class="text-white text-xs w-20 text-end" id="end-time" name="end-time">00:00</p>
+            </div>
+        </div>
+    </div>
+    <footer class="bg-white">
+    </footer> 
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@2.5.1/dist/flowbite.min.js"></script>
+    <script>
+        let audioCxt;
+        let input_signal;
+        let analyser;
+
+        let samplerate;
+        let freq_data_array;
+
+        let freq_vector;
+        let final_array;
+
+        let chart;
+
+        let impulse_response_url = '';
+
+        const audio_element = document.querySelector('audio');
+
+        document.getElementById('input-signal').addEventListener(
+            'change', (event) => {
+                audio_element.src = URL.createObjectURL(event.target.files[0])
+            }
+        )
+
+        document.getElementById('impulse-response').addEventListener(
+            'change', (event) => {
+                impulse_response_url = URL.createObjectURL(event.target.files[0])
+            }
+        )
+
+        document.getElementById('convolution-button').addEventListener(
+            'change', async (event) => {
+                if (audioCxt) {
+                    input_signal.disconnect();
+                    if (event.target.checked == true) {
+                        let impulse_response = await convolve(impulse_response_url);
+                        input_signal.connect(impulse_response).connect(analyser).connect(audioCxt.destination);
+                    } else {
+                        input_signal.connect(analyser).connect(audioCxt.destination);
+                    }
+
+                }
+            }
+        )
+
+        document.getElementById('check-samplerate').addEventListener(
+            'click', (event) => {
+                const audioCxt = new AudioContext();
+                document.getElementById('samplerate').value = audioCxt.sampleRate;
+            }
+        )
+
+        document.getElementById('play').addEventListener(
+            'click', async (event) => {
+                if (is_audio_context_not_created()) {
+                    if (document.getElementById('samplerate').value != '') {
+                        audioCxt = new AudioContext({
+                            sampleRate: document.getElementById('samplerate').value
+                        })
+                    } else {
+                        audioCxt = new AudioContext()
+                    }
+
+                    input_signal = audioCxt.createMediaElementSource(audio_element)
+                    analyser = audioCxt.createAnalyser();
+
+                    analyser.fftSize = parseInt(document.getElementById('fftsize').value);
+                    analyser.maxDecibels = parseInt(document.getElementById('max_db').value);
+                    analyser.minDecibels = parseInt(document.getElementById('min_db').value);
+
+                    freq_data_array = new Float32Array(analyser.frequencyBinCount);
+                }
+
+                if (audioCxt.state == "suspended") {
+                    audioCxt.resume();
+                }
+
+                input_signal.disconnect(); //Avoid create multiples convolutions
+
+                if (document.getElementById('convolution-button').checked) {
+                    if (impulse_response_url != '') {
+                        let impulse_response = await convolve(impulse_response_url);
+
+                        input_signal.connect(impulse_response).connect(analyser).connect(audioCxt.destination);
+                    }
+
+                } else {
+                    input_signal.connect(analyser).connect(audioCxt.destination);
+                }
+
+                if (document.getElementById('play').dataset.playing == 'false') {
+                    audio_element.play();
+
+                    document.getElementById('play').dataset.playing = 'true';
+                    document.getElementById('play').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="white" class="w-8 h-8"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" /></svg>`
+                } else {
+                    audio_element.pause();
+
+                    document.getElementById('play').dataset.playing = 'false';
+                    document.getElementById('play').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="white" class="w-8 h-8"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z" /></svg>`
+                }
+
+                freq_vector = create_freq_vector(audioCxt.sampleRate, analyser.fftSize);
+                final_array = format_data_array_to_plot(freq_vector, freq_data_array)
+                chart = create_chart(final_array)
+
+                update_chart()
+
+            }
+        )
+
+        audio_element.addEventListener(
+            "timeupdate", () => {
+                document.getElementById('current-time').textContent = format_time(audio_element.currentTime);
+                document.getElementById('end-time').textContent = format_time(audio_element.duration);
+                document.getElementById('time-range').min = 0;
+                document.getElementById('time-range').max = audio_element.duration;
+                document.getElementById('time-range').value = audio_element.currentTime;
+            }
+        )
+
+        audio_element.addEventListener(
+            "ended", () => {
+                audio_element.currentTime = 0;
+                document.getElementById('current-time').textContent = format_time(audio_element.currentTime);
+                document.getElementById('end-time').textContent = format_time(audio_element.duration);
+                document.getElementById('time-range').min = 0;
+                document.getElementById('time-range').max = audio_element.duration;
+                document.getElementById('time-range').value = 0;
+
+                document.getElementById('play').dataset.playing = 'false';
+                document.getElementById('play').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="white" class="w-8 h-8"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z" /></svg>`
+            }
+        )
+
+        document.getElementById('time-range').addEventListener(
+            'input', (event) => {
+                audio_element.currentTime = event.target.value;
+            }
+        );
+
+
+
+        function is_audio_context_not_created()
+        {
+            if (audioCxt) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+
+        function format_time(seconds) {
+            if (isNaN(seconds)) {
+
+                return "00:00";
+            } else {
+                minutes = Math.floor(seconds / 60);
+                minutes = (minutes >= 10) ? minutes : "0" + minutes;
+                seconds = Math.floor(seconds % 60);
+                seconds = (seconds >= 10) ? seconds : "0" + seconds;
+                
+                return minutes + ":" + seconds;
+            }        
+        }
+
+        async function convolve(filename) {
+            let convolver = audioCxt.createConvolver();
+
+            let response = await fetch(filename);
+            let arraybuffer = await response.arrayBuffer();
+            convolver.buffer = await audioCxt.decodeAudioData(arraybuffer);
+
+            return convolver;
+        }
+
+        const format_log_sticks = function(value, index, ticks) {
+            switch (value) {
+            case 20:
+                return 20;
+            case 40:
+                return 40;
+            case 60:
+                return 60;
+            case 100:
+                return 100;
+            case 200:
+                return 200;
+            case 400:
+                return 400;
+            case 1000:
+                return 1+' k';
+            case 2000:
+                return 2+' k';
+            case 4000:
+                return 4+' k';
+            case 6000:
+                return 6+' k';
+            case 10000:
+                return 10+' k';
+            case 20000:
+                return 20+' k';
+            default:
+                return '';
+            }
+        }
+
+        function create_chart(final_array) {
+
+            let chart = new Chart("chart", {
+                type: "line",
+                data: {
+                    datasets: [{
+                    data: final_array,
+                    }]
+                },
+                options: {
+                    legend: {
+                        display: false
+                    },
+                    responsive: true,
+                    scales: {
+                        yAxes: [{
+                            display: true,
+                            ticks: {
+                                max: 0,
+                                min: -90,
+                            },
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Amplitude (dB)'
+                            }
+                        }],
+                        xAxes: [{
+                            display: true,
+                            type: 'logarithmic',
+                            ticks: {
+                                max: 20000,
+                                min: 20,
+                                callback: format_log_sticks
+                            },
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Frequência (Hz)'
+                            }
+                        }]
+                    }
+                }
+            });
+            
+            return chart;
+        }
+
+            function create_freq_vector(samplerate, fftsize) {
+                console.log(fftsize, samplerate)
+                const stepFreq = samplerate/fftsize;
+                const maxFreq = samplerate/2;
+
+                let vec = [];
+
+                for (let aux = 0; aux < maxFreq; aux += stepFreq) {
+                vec.push(aux); 
+                }
+
+                return vec;
+            }
+
+            function format_data_array_to_plot(x_axis, y_axis) {
+                let format_array = [];
+
+                x_axis.forEach((element, index) => {
+                    format_array.push({x:element,y:y_axis[index]})
+                })
+
+                return format_array;
+            }
+
+            function update_chart() {
+                requestAnimationFrame(update_chart);
+                analyser.getFloatFrequencyData(freq_data_array);
+                final_array = format_data_array_to_plot(freq_vector, freq_data_array);
+                chart.data.datasets[0].data = final_array;
+                chart.update();
+            }
+
+    </script>
+</body>
+</html>
